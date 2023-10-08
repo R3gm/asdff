@@ -7,7 +7,9 @@ from diffusers import (
     StableDiffusionControlNetPipeline,
     StableDiffusionInpaintPipeline,
     StableDiffusionPipeline,
+    ControlNetModel
 )
+import torch
 
 from asdff.base import AdPipelineBase
 
@@ -45,6 +47,41 @@ class AdCnPipeline(AdPipelineBase, StableDiffusionControlNetPipeline):
             feature_extractor=self.feature_extractor,
             requires_safety_checker=self.config.requires_safety_checker,
         )
+
+    @property
+    def txt2img_class(self):
+        return StableDiffusionControlNetPipeline
+
+
+
+
+class AdCnPreloadPipe(AdPipelineBase):
+
+    def __init__(self, pipe = None):
+      if pipe != None:
+          self.inpaint_pipeline(pipe)
+
+    def txt2img_class(self, pipe_txt):
+      self.txt2img_class = pipe_txt
+      return self.txt2img_class
+
+    def inpaint_pipeline(self, pipe):
+
+      controlnet = ControlNetModel.from_pretrained("lllyasviel/control_v11p_sd15_inpaint", torch_dtype=torch.float16, variant="fp16")
+      self.preload = True
+      self.inpaint_pipeline = StableDiffusionControlNetInpaintPipeline(
+            vae=pipe.vae,
+            text_encoder=pipe.text_encoder,
+            tokenizer=pipe.tokenizer,
+            unet=pipe.unet,
+            controlnet=controlnet,
+            scheduler=pipe.scheduler,
+            safety_checker=pipe.safety_checker,
+            feature_extractor=pipe.feature_extractor,
+            requires_safety_checker=pipe.config.requires_safety_checker,
+        )
+
+      return self.inpaint_pipeline
 
     @property
     def txt2img_class(self):
