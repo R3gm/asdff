@@ -3,16 +3,17 @@ from __future__ import annotations
 import inspect
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Iterable, List, Mapping, Optional
-
+import numpy as np
 from diffusers.utils import logging
 from PIL import Image
-
+import torch
 from asdff.utils import (
     ADOutput,
     bbox_padding,
     composite,
     mask_dilate,
     mask_gaussian_blur,
+    make_inpaint_condition,
 )
 from asdff.yolo import yolo_detector
 
@@ -87,6 +88,7 @@ class AdPipelineBase(ABC):
 
             for j, detector in enumerate(detectors):
                 masks = detector(init_image)
+
                 if masks is None:
                     logger.info(
                         f"No object detected on {ordinal(i + 1)} image with {ordinal(j + 1)} detector."
@@ -107,8 +109,12 @@ class AdPipelineBase(ABC):
                     crop_mask = mask.crop(bbox_padded)
 
                     inpaint_args = self._get_inpaint_args(common, inpaint_only)
+
                     inpaint_args["image"] = crop_image
                     inpaint_args["mask_image"] = crop_mask
+
+                    inpaint_args["control_image"] = make_inpaint_condition(crop_image, crop_mask)
+  
                     inpaint_output = self.inpaint_pipeline(**inpaint_args)
                     inpaint_image: Image.Image = inpaint_output[0][0]
                     final_image = composite(
